@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VSM Kit Collection Tracker</title>
+<!-- Standalone version: data is kept in this browser. Select "Save copy with data" to share it. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --paper:#F3F6F6; --surface:#FFFFFF; --ink:#1B2730; --muted:#5B6B76; --line:#D6DFE2;
+  --brand:#14606F; --brand-ink:#FFFFFF;
+  --pending:#B7791F; --pending-bg:#FBF1DE;
+  --collected:#2563A8; --collected-bg:#E2EDF9;
+  --delivered:#2F7D4F; --delivered-bg:#E1F2E7;
+  --danger:#B42318; --focus:#0E7C8F;
+  color-scheme: light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#11181C; --surface:#1A2328; --ink:#E6EDF0; --muted:#9AAAB3; --line:#2E3A41;
+    --brand:#3FA3B4; --brand-ink:#0B1417;
+    --pending:#E2A84A; --pending-bg:#3A2D14;
+    --collected:#78A9E6; --collected-bg:#1B2D44;
+    --delivered:#6BC48E; --delivered-bg:#173323;
+    --danger:#F0877C; --focus:#5CC2D3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#11181C; --surface:#1A2328; --ink:#E6EDF0; --muted:#9AAAB3; --line:#2E3A41;
+  --brand:#3FA3B4; --brand-ink:#0B1417;
+  --pending:#E2A84A; --pending-bg:#3A2D14;
+  --collected:#78A9E6; --collected-bg:#1B2D44;
+  --delivered:#6BC48E; --delivered-bg:#173323;
+  --danger:#F0877C; --focus:#5CC2D3;
+  color-scheme: dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wrap{max-width:1200px;margin:0 auto;padding:20px 16px 48px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:20px}
+h1{font-size:1.6rem;font-weight:800;letter-spacing:-.01em;margin:0}
+.sub{color:var(--muted);margin:2px 0 0;font-size:.9rem}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.btn.small{padding:4px 10px;font-size:.82rem}
+.btn.danger{color:var(--danger)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* The pipeline: the one bold element */
+.pipeline{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-bottom:8px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--surface)}
+.stage{position:relative;padding:16px 18px 14px 28px;text-align:left;border:0;background:transparent;cursor:pointer;border-right:1px solid var(--line)}
+.stage:last-child{border-right:0}
+.stage::after{content:"";position:absolute;right:-11px;top:50%;width:20px;height:20px;transform:translateY(-50%) rotate(45deg);background:inherit;border-top:1px solid var(--line);border-right:1px solid var(--line);z-index:1}
+.stage:last-child::after{display:none}
+.stage .n{display:block;font-size:2.4rem;font-weight:800;line-height:1}
+.stage .lbl{display:block;font-weight:700;margin-top:4px}
+.stage .detail{display:block;color:var(--muted);font-size:.82rem;margin-top:2px}
+.stage.pending .n{color:var(--pending)} .stage.collected .n{color:var(--collected)} .stage.delivered .n{color:var(--delivered)}
+.stage[aria-pressed="true"].pending{background:var(--pending-bg)}
+.stage[aria-pressed="true"].collected{background:var(--collected-bg)}
+.stage[aria-pressed="true"].delivered{background:var(--delivered-bg)}
+.pipe-note{color:var(--muted);font-size:.82rem;margin:0 0 18px}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.toolbar input[type=search]{flex:1 1 220px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.toolbar select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.count{color:var(--muted);font-size:.85rem}
+
+.banner{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:var(--pending-bg);color:var(--ink);font-size:.9rem}
+.banner[hidden]{display:none}
+
+.tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;min-width:940px}
+.taskid{font-weight:600;white-space:nowrap}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.8rem;color:var(--muted);font-weight:600;background:var(--surface);position:sticky;top:0}
+tr:last-child td{border-bottom:0}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:color-mix(in srgb,var(--paper) 60%,var(--surface))}
+.pname{font-weight:700}
+.addr{color:var(--muted);font-size:.85rem;max-width:280px}
+.chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.78rem;font-weight:600;border:1px solid var(--line);margin:0 4px 4px 0;white-space:nowrap}
+.status{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.8rem;font-weight:700;white-space:nowrap}
+.status.pending{background:var(--pending-bg);color:var(--pending)}
+.status.collected{background:var(--collected-bg);color:var(--collected)}
+.status.delivered{background:var(--delivered-bg);color:var(--delivered)}
+.wait{display:block;font-size:.78rem;color:var(--muted);margin-top:3px}
+.wait.late{color:var(--danger);font-weight:600}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.empty{padding:36px 16px;text-align:center;color:var(--muted)}
+.empty strong{display:block;color:var(--ink);font-size:1.05rem;margin-bottom:4px}
+
+/* Drawer */
+dialog{border:0;padding:0;border-radius:14px;background:var(--surface);color:var(--ink);width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 24px)}
+dialog::backdrop{background:rgba(10,20,25,.45)}
+.dlg{padding:20px;overflow:auto;max-height:calc(100vh - 24px)}
+.dlg h2{margin:0 0 4px;font-size:1.25rem}
+.dlg .hint{color:var(--muted);font-size:.85rem;margin:0 0 14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label,.field .legend{font-size:.82rem;font-weight:600;color:var(--muted)}
+.field input,.field textarea,.field select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.field textarea{min-height:60px;resize:vertical}
+.checks{display:flex;flex-wrap:wrap;gap:6px 14px}
+.checks label{display:flex;gap:6px;align-items:center;font-weight:500;color:var(--ink);font-size:.92rem}
+.dates{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.dates .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.today{background:none;border:0;color:var(--brand);font-size:.8rem;font-weight:600;cursor:pointer;padding:2px 0;text-align:left}
+.warn{color:var(--danger);font-size:.85rem;margin:6px 0 0}
+.dlg-actions{display:flex;justify-content:space-between;gap:8px;margin-top:6px;flex-wrap:wrap}
+.dlg-actions .right{display:flex;gap:8px}
+.summary-list{margin:8px 0 14px;padding-left:18px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-weight:600;font-size:.9rem;z-index:20}
+.toast[hidden]{display:none}
+@media (max-width:640px){
+  .stage{padding:12px 10px 10px 16px}
+  .stage .n{font-size:1.8rem}
+  .stage .detail{display:none}
+  .grid2,.dates .grid3{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>VSM kit collections</h1>
+      <p class="sub" id="subline">Kits collected from patients’ homes and sent back to the hospital. Saved in this browser.</p>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="btnImport" type="button">Upload Excel</button>
+      <button class="btn" id="btnAdd" type="button">Add case</button>
+      <button class="btn" id="btnExport" type="button">Export to Excel</button>
+      <button class="btn" id="btnCopy" type="button">Save copy with data</button>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" hidden>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <nav class="pipeline" aria-label="Filter by status">
+    <button class="stage pending" data-status="pending" aria-pressed="false" type="button"><span class="n" id="nPending">0</span><span class="lbl">Pending collection</span><span class="detail" id="dPending">Waiting for a driver</span></button>
+    <button class="stage collected" data-status="collected" aria-pressed="false" type="button"><span class="n" id="nCollected">0</span><span class="lbl">Collected</span><span class="detail" id="dCollected">Picked up, not yet at the hospital</span></button>
+    <button class="stage delivered" data-status="delivered" aria-pressed="false" type="button"><span class="n" id="nDelivered">0</span><span class="lbl">Delivered</span><span class="detail" id="dDelivered">Returned to the hospital</span></button>
+  </nav>
+  <p class="pipe-note" id="pipeNote">Tap a stage to show only those cases. Tap it again to show all. To share your data, select Save copy with data and send the file.</p>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Search task ID, name, address or contact" aria-label="Search cases">
+    <select id="bagFilter" aria-label="Filter by bag">
+      <option value="">All bags</option><option value="Soft">Soft bag</option><option value="Hard">Hard bag</option><option value="none">Bag not specified</option>
+    </select>
+    <select id="sortBy" aria-label="Sort">
+      <option value="request">Oldest request first</option>
+      <option value="request-desc">Newest request first</option>
+      <option value="name">Name A–Z</option>
+      <option value="task">Task ID</option>
+    </select>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="tablebox">
+    <table>
+      <thead><tr>
+        <th>Task ID</th><th>Patient</th><th>Bags and items</th><th>Requested</th><th>Collected</th><th>Delivered</th><th>Driver</th><th>Status</th><th><span class="sr">Action</span></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden></div>
+  </div>
+</div>
+
+<!-- Case editor -->
+<dialog id="caseDlg" aria-labelledby="caseTitle">
+  <form class="dlg" id="caseForm" method="dialog">
+    <h2 id="caseTitle">Case</h2>
+    <p class="hint" id="caseHint">Changes are saved in this browser.</p>
+    <div class="dates">
+      <div class="grid3">
+        <div class="field"><label for="fReq">Requested</label><input type="date" id="fReq"><button type="button" class="today" data-today="fReq">Today</button></div>
+        <div class="field"><label for="fCol">Collected</label><input type="date" id="fCol"><button type="button" class="today" data-today="fCol">Today</button></div>
+        <div class="field"><label for="fDel">Delivered to hospital</label><input type="date" id="fDel"><button type="button" class="today" data-today="fDel">Today</button></div>
+      </div>
+      <p class="warn" id="dateWarn" hidden></p>
+    </div>
+    <div class="grid2">
+      <div class="field"><label for="fTask">Task ID</label><input id="fTask"></div>
+      <div class="field"><label for="fName">Patient name</label><input id="fName" required></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label for="fPc">Patient contact</label><input id="fPc"></div>
+      <div class="field"><label for="fEc">Emergency contact</label><input id="fEc"></div>
+    </div>
+    <div class="field"><label for="fAddr">Address</label><textarea id="fAddr"></textarea></div>
+    <div class="field"><span class="legend">Bags</span>
+      <div class="checks"><label><input type="checkbox" id="bSoft"> Soft bag</label><label><input type="checkbox" id="bHard"> Hard bag</label></div>
+    </div>
+    <div class="field"><span class="legend">Extra items</span>
+      <div class="checks" id="itemChecks"></div>
+    </div>
+    <div class="field"><label for="fOther">Other items</label><input id="fOther" placeholder="For example: wheelchair, commode"></div>
+    <div class="grid2">
+      <div class="field"><label for="fDriver">Driver</label><input id="fDriver"></div>
+      <div class="field"><label for="fRemarks">Remarks from Excel</label><input id="fRemarks"></div>
+    </div>
+    <div class="field"><label for="fNotes">Notes</label><textarea id="fNotes" placeholder="Anything the team should know"></textarea></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn danger" id="btnDelete">Delete case</button>
+      <div class="right">
+        <button type="button" class="btn" id="btnCancel">Cancel</button>
+        <button type="submit" class="btn primary" id="btnSave">Save changes</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Import preview -->
+<dialog id="importDlg" aria-labelledby="importTitle">
+  <form class="dlg" method="dialog" id="importForm">
+    <h2 id="importTitle">Add cases from Excel</h2>
+    <p class="hint" id="importFile"></p>
+    <div id="importSummary"></div>
+    <div class="field"><label for="impDate">Request date for new cases</label><input type="date" id="impDate">
+      <span class="count">Used when the file has no request date column. You can change any case later.</span></div>
+    <div class="dlg-actions">
+      <span></span>
+      <div class="right">
+        <button type="button" class="btn" id="impCancel">Cancel</button>
+        <button type="submit" class="btn primary" id="impGo">Add cases</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script type="application/json" id="seedData">{"savedAt":"","cases":[]}</script>
+<script>
+const PRISTINE = "<!doctype html>\n" + document.documentElement.outerHTML;
+const STORE_KEY = "vsm-kit-tracker-cases";
+const SEEN_KEY = "vsm-kit-tracker-seen-copies";
+/* ---------- Config ---------- */
+const ITEMS = [
+  {label:"Drip stand", re:/drip/i},
+  {label:"Oxygen concentrator", re:/oxygen|concentrator|\bo2\b/i},
+  {label:"Weighing scale", re:/weigh|scale/i}
+];
+const SHEET_RE = /vsm/i;            // the tab to read
+const LATE_DAYS = 3;                // pending longer than this is flagged
+
+/* ---------- Helpers ---------- */
+const $ = id => document.getElementById(id);
+const todayISO = () => { const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
+function slug(s){ return String(s||"").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""); }
+function caseKey(name,address){
+  const all=[...String(address||"").matchAll(/\d{6}/g)];
+  const loc= all.length ? all[all.length-1][0] : slug(address).slice(0,40);
+  return "k_"+slug(name).slice(0,60)+"_"+(loc||"x");
+}
+function statusOf(c){ return c.deliveredDate ? "delivered" : c.collectedDate ? "collected" : "pending"; }
+const STATUS_LABEL = {pending:"Pending collection", collected:"Collected", delivered:"Delivered"};
+function fmt(iso){ if(!iso) return ""; const [y,m,d]=iso.split("-"); const mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m-1]; return `${+d} ${mo} ${y}`; }
+function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
+function esc(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
+function banner(msg){ const b=$("banner"); if(msg){ b.textContent=msg; b.hidden=false; } else b.hidden=true; }
+function toISODate(v){
+  if(v==null||v==="") return "";
+  if(v instanceof Date && !isNaN(v)) return new Date(v.getTime()-v.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const s=String(v).trim();
+  let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if(m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); // day/month/year (Singapore)
+  if(m){ const y=m[3].length===2?"20"+m[3]:m[3]; return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`; }
+  const d=new Date(s); return isNaN(d)?"":toISODate(d);
+}
+function parseBags(text){
+  const t=String(text||"");
+  const bags=[]; if(/soft/i.test(t)) bags.push("Soft"); if(/hard/i.test(t)) bags.push("Hard");
+  return bags;
+}
+function parseItems(text){ return ITEMS.filter(i=>i.re.test(String(text||""))).map(i=>i.label); }
+
+/* ---------- State ---------- */
+let canWrite=true;
+let cases=[];            // [{id, ...data}]
+let statusFilter="";     // "", pending, collected, delivered
+let editingId=null;
+let pendingImport=null;
+
+/* ---------- Render ---------- */
+function render(){
+  const counts={pending:0,collected:0,delivered:0};
+  const bagCount={pending:{Soft:0,Hard:0},collected:{Soft:0,Hard:0}};
+  const today=todayISO();
+  let late=0, deliveredToday=0;
+  for(const c of cases){
+    const s=statusOf(c); counts[s]++;
+    if(bagCount[s]) (c.bags||[]).forEach(b=>{ if(bagCount[s][b]!=null) bagCount[s][b]++; });
+    if(s==="pending" && c.requestDate && daysBetween(c.requestDate,today)>LATE_DAYS) late++;
+    if(c.deliveredDate===today) deliveredToday++;
+  }
+  $("nPending").textContent=counts.pending; $("nCollected").textContent=counts.collected; $("nDelivered").textContent=counts.delivered;
+  $("dPending").textContent=`${bagCount.pending.Soft} soft, ${bagCount.pending.Hard} hard`+(late?`; ${late} waiting over ${LATE_DAYS} days`:"");
+  $("dCollected").textContent=`${bagCount.collected.Soft} soft, ${bagCount.collected.Hard} hard to send back`;
+  $("dDelivered").textContent=deliveredToday?`${deliveredToday} delivered today`:"Returned to the hospital";
+  document.querySelectorAll(".stage").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.status===statusFilter)));
+
+  const q=$("search").value.trim().toLowerCase();
+  const bag=$("bagFilter").value;
+  let list=cases.filter(c=>{
+    if(statusFilter && statusOf(c)!==statusFilter) return false;
+    if(bag==="none" && (c.bags||[]).length) return false;
+    if(bag && bag!=="none" && !(c.bags||[]).includes(bag)) return false;
+    if(q){ const hay=[c.taskId,c.name,c.address,c.patientContact,c.emergencyContact,c.driver,c.notes,c.remarks].join(" ").toLowerCase(); if(!hay.includes(q)) return false; }
+    return true;
+  });
+  const sort=$("sortBy").value;
+  list.sort((a,b)=>{
+    if(sort==="name") return String(a.name).localeCompare(String(b.name));
+    if(sort==="task") return String(a.taskId||"\uffff").localeCompare(String(b.taskId||"\uffff"),undefined,{numeric:true});
+    const ra=a.requestDate||"9999", rb=b.requestDate||"9999";
+    return sort==="request-desc" ? rb.localeCompare(ra) : ra.localeCompare(rb);
+  });
+  $("count").textContent=`${list.length} of ${cases.length} cases`;
+
+  const tb=$("rows"); tb.innerHTML="";
+  for(const c of list){
+    const s=statusOf(c);
+    const tr=document.createElement("tr"); tr.dataset.id=c.id; tr.tabIndex=0;
+    const bags=(c.bags||[]).map(b=>`<span class="chip">${esc(b)} bag</span>`).join("") || `<span class="chip">Bag not specified</span>`;
+    const items=[...(c.items||[]), ...(c.otherItems?[c.otherItems]:[])].map(i=>`<span class="chip">${esc(i)}</span>`).join("");
+    let wait="";
+    if(s==="pending" && c.requestDate){ const d=daysBetween(c.requestDate,today); wait=`<span class="wait ${d>LATE_DAYS?"late":""}">${d<=0?"Requested today":d===1?"Waiting 1 day":`Waiting ${d} days`}</span>`; }
+    let action="";
+    if(canWrite && s==="pending") action=`<button class="btn small" data-quick="collectedDate" type="button">Collected today</button>`;
+    if(canWrite && s==="collected") action=`<button class="btn small" data-quick="deliveredDate" type="button">Delivered today</button>`;
+    tr.innerHTML=`<td class="taskid">${esc(c.taskId)||"—"}</td>
+      <td><div class="pname">${esc(c.name)}</div><div class="addr">${esc(c.address)}</div></td>
+      <td>${bags}${items}</td>
+      <td>${fmt(c.requestDate)||"—"}${wait}</td>
+      <td>${fmt(c.collectedDate)||"—"}</td>
+      <td>${fmt(c.deliveredDate)||"—"}</td>
+      <td>${esc(c.driver)||"—"}</td>
+      <td><span class="status ${s}">${STATUS_LABEL[s]}</span></td>
+      <td>${action}</td>`;
+    tb.appendChild(tr);
+  }
+  const empty=$("empty");
+  if(!cases.length){ empty.innerHTML=`<strong>No cases yet</strong>Upload the daily Excel file with the VSM Kit tab, or add a case by hand.`; empty.hidden=false; }
+  else if(!list.length){ empty.innerHTML=`<strong>No cases match</strong>Clear the search or tap the highlighted stage to show all cases.`; empty.hidden=false; }
+  else empty.hidden=true;
+}
+
+/* ---------- Writes ---------- */
+function persist(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(cases)); return true; }
+  catch{ toast("Couldn’t save in this browser. Select Save copy with data to keep your work."); return false; }
+}
+async function writeCase(id,data,{create=false}={}){
+  const now=new Date().toISOString();
+  const i=cases.findIndex(c=>c.id===id);
+  if(i>=0 && !create) cases[i]={...cases[i],...data,updatedAt:now};
+  else if(i>=0) cases[i]={id,...data,updatedAt:now};
+  else cases.push({id,...data,updatedAt:now});
+  const ok=persist(); render(); return ok;
+}
+
+/* ---------- Quick actions ---------- */
+$("rows").addEventListener("click",async e=>{
+  const tr=e.target.closest("tr"); if(!tr) return;
+  const quick=e.target.closest("[data-quick]");
+  if(quick){
+    e.stopPropagation(); quick.disabled=true;
+    const ok=await writeCase(tr.dataset.id,{[quick.dataset.quick]:todayISO()});
+    if(ok) toast(quick.dataset.quick==="collectedDate"?"Marked collected today":"Marked delivered today");
+    quick.disabled=false; return;
+  }
+  openCase(tr.dataset.id);
+});
+$("rows").addEventListener("keydown",e=>{ if(e.key==="Enter"&&e.target.matches("tr")) openCase(e.target.dataset.id); });
+
+/* ---------- Case editor ---------- */
+const itemBox=$("itemChecks");
+ITEMS.forEach((it,i)=>{ const l=document.createElement("label"); l.innerHTML=`<input type="checkbox" data-item="${esc(it.label)}"> ${esc(it.label)}`; itemBox.appendChild(l); });
+
+function openCase(id){
+  editingId=id;
+  const c = id ? cases.find(x=>x.id===id) : {requestDate:todayISO(),bags:[],items:[]};
+  if(!c) return;
+  $("caseTitle").textContent = id ? c.name : "Add case";
+  $("caseHint").textContent = "Changes are saved in this browser.";
+  $("fReq").value=c.requestDate||""; $("fCol").value=c.collectedDate||""; $("fDel").value=c.deliveredDate||"";
+  $("fTask").value=c.taskId||""; $("fName").value=c.name||""; $("fPc").value=c.patientContact||""; $("fEc").value=c.emergencyContact||"";
+  $("fAddr").value=c.address||""; $("bSoft").checked=(c.bags||[]).includes("Soft"); $("bHard").checked=(c.bags||[]).includes("Hard");
+  itemBox.querySelectorAll("input").forEach(i=>i.checked=(c.items||[]).includes(i.dataset.item));
+  $("fOther").value=c.otherItems||""; $("fDriver").value=c.driver||""; $("fRemarks").value=c.remarks||""; $("fNotes").value=c.notes||"";
+  $("btnDelete").hidden=!id||!canWrite; $("btnSave").disabled=!canWrite;
+  $("caseForm").querySelectorAll("input,textarea").forEach(el=>el.readOnly=!canWrite);
+  checkDates(); $("caseDlg").showModal();
+}
+function checkDates(){
+  const r=$("fReq").value,c=$("fCol").value,d=$("fDel").value; let msg="";
+  if(d&&!c) msg="A delivered kit should also have a collected date.";
+  else if(c&&d&&d<c) msg="The delivered date is before the collected date.";
+  else if(r&&c&&c<r) msg="The collected date is before the request date.";
+  $("dateWarn").textContent=msg; $("dateWarn").hidden=!msg;
+}
+["fReq","fCol","fDel"].forEach(id=>$(id).addEventListener("input",checkDates));
+document.querySelectorAll("[data-today]").forEach(b=>b.addEventListener("click",()=>{ if(!canWrite) return; $(b.dataset.today).value=todayISO(); checkDates(); }));
+$("btnCancel").addEventListener("click",()=>$("caseDlg").close());
+$("caseForm").addEventListener("submit",async e=>{
+  e.preventDefault(); if(!canWrite) return;
+  const name=$("fName").value.trim(); if(!name){ $("fName").focus(); return; }
+  const data={
+    taskId:$("fTask").value.trim(), name, patientContact:$("fPc").value.trim(), emergencyContact:$("fEc").value.trim(), address:$("fAddr").value.trim(),
+    bags:[$("bSoft").checked&&"Soft",$("bHard").checked&&"Hard"].filter(Boolean),
+    items:[...itemBox.querySelectorAll("input:checked")].map(i=>i.dataset.item),
+    otherItems:$("fOther").value.trim(), driver:$("fDriver").value.trim(), remarks:$("fRemarks").value.trim(), notes:$("fNotes").value.trim(),
+    requestDate:$("fReq").value, collectedDate:$("fCol").value, deliveredDate:$("fDel").value
+  };
+  $("btnSave").disabled=true;
+  let ok;
+  if(editingId) ok=await writeCase(editingId,data);
+  else { const id=uniqueId(caseKey(data.name,data.address)); ok=await writeCase(id,{...data,key:caseKey(data.name,data.address),source:"manual",createdAt:new Date().toISOString()},{create:true}); }
+  $("btnSave").disabled=false;
+  if(ok){ $("caseDlg").close(); toast(editingId?"Changes saved":"Case added"); }
+});
+$("btnDelete").addEventListener("click",async()=>{
+  const c=cases.find(x=>x.id===editingId); if(!c) return;
+  if(!confirm(`Delete the case for ${c.name}? This can’t be undone.`)) return;
+  cases=cases.filter(x=>x.id!==editingId); persist(); render(); $("caseDlg").close(); toast("Case deleted");
+});
+$("btnAdd").addEventListener("click",()=>openCase(null));
+
+/* ---------- Import ---------- */
+function uniqueId(base,taken=new Set()){
+  const ids=new Set([...cases.map(c=>c.id),...taken]);
+  if(!ids.has(base)) return base;
+  let n=2; while(ids.has(`${base}-${n}`)) n++; return `${base}-${n}`;
+}
+function oneline(v,sep){ return String(v??"").trim().split(/\s*\n\s*/).map(p=>p.trim()).filter(Boolean).join(sep); }
+function pick(row,names){
+  for(const k of Object.keys(row)){ const nk=k.trim().toLowerCase(); if(names.includes(nk)) return row[k]; }
+  return "";
+}
+$("btnImport").addEventListener("click",()=>{ if(!canWrite){ toast("You can view this dashboard but not add cases."); return; } $("fileInput").click(); });
+$("fileInput").addEventListener("change",async e=>{
+  const file=e.target.files[0]; e.target.value=""; if(!file) return;
+  if(typeof XLSX==="undefined"){ toast("Upload needs an internet connection. Connect and reload the page."); return; }
+  let wb; try{ wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true}); }catch{ toast("This file couldn’t be read. Upload an .xlsx file."); return; }
+  const sheetName=wb.SheetNames.find(n=>SHEET_RE.test(n));
+  if(!sheetName){ toast(`No VSM tab found. Tabs in this file: ${wb.SheetNames.join(", ")}`); return; }
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:""});
+  const fresh=[], skipped=[], taken=new Set();
+  for(const r of rows){
+    const name=String(pick(r,["name","patient name","patient"])).trim(); if(!name) continue;
+    const address=oneline(pick(r,["address","patient address"]),", ");
+    const caseText=String(pick(r,["case","bag","kit","bag type","kit type"]));
+    const remarks=oneline(pick(r,["remarks","remark","notes","items"])," / ");
+    const key=caseKey(name,address);
+    const open=cases.find(c=>c.key===key && statusOf(c)!=="delivered") || fresh.find(f=>f.data.key===key);
+    if(open){ skipped.push(name); continue; }
+    const id=uniqueId(key,taken); taken.add(id);
+    let bags=parseBags(caseText+" "+remarks);
+    fresh.push({id,data:{
+      key,taskId:String(pick(r,["task id","taskid","task","task no","task no.","task number"])).trim(),name,address,
+      patientContact:oneline(pick(r,["patient contact","contact","phone"])," / "),
+      emergencyContact:oneline(pick(r,["emergency contact","next of kin"])," / "),
+      bags, items:parseItems(caseText+" "+remarks), otherItems:"", remarks,
+      requestDate:toISODate(pick(r,["request date","requested","date requested","date"])),
+      collectedDate:toISODate(pick(r,["collected date","collection date","collected"])),
+      deliveredDate:toISODate(pick(r,["delivered date","sent date","date sent","delivered"])),
+      driver:String(pick(r,["driver"])).trim(), notes:"",
+      source:"excel", sourceFile:file.name, createdAt:new Date().toISOString()
+    }});
+  }
+  pendingImport=fresh;
+  $("importFile").textContent=`${file.name}, tab “${sheetName}”`;
+  const list = fresh.length ? `<ul class="summary-list">${fresh.slice(0,8).map(f=>`<li>${esc(f.data.name)}${f.data.bags.length?` (${f.data.bags.join(" + ")})`:""}</li>`).join("")}${fresh.length>8?`<li>and ${fresh.length-8} more</li>`:""}</ul>`:"";
+  $("importSummary").innerHTML=`<p><strong>${fresh.length} new ${fresh.length===1?"case":"cases"}</strong> to add.${skipped.length?` ${skipped.length} already on the dashboard and not yet delivered, so they’re skipped.`:""}</p>${list}`;
+  $("impDate").value=todayISO();
+  $("impGo").disabled=!fresh.length;
+  $("importDlg").showModal();
+});
+$("impCancel").addEventListener("click",()=>{ pendingImport=null; $("importDlg").close(); });
+$("importForm").addEventListener("submit",async e=>{
+  e.preventDefault(); if(!pendingImport) return;
+  const reqDate=$("impDate").value||todayISO();
+  $("impGo").disabled=true; let added=0;
+  for(const f of pendingImport){
+    if(!f.data.requestDate) f.data.requestDate=reqDate;
+    if(await writeCase(f.id,f.data,{create:true})) added++; else break;
+  }
+  $("importDlg").close(); pendingImport=null;
+  toast(`${added} ${added===1?"case":"cases"} added`);
+});
+
+/* ---------- Export ---------- */
+$("btnExport").addEventListener("click",async()=>{
+  if(typeof XLSX==="undefined"){ toast("Export needs an internet connection. Connect and reload the page."); return; }
+  const rows=cases.map(c=>({
+    "Task ID":c.taskId,"Name":c.name,"Patient Contact":c.patientContact,"Emergency Contact":c.emergencyContact,"Address":c.address,
+    "Bags":(c.bags||[]).join(" + "),"Extra items":[...(c.items||[]),...(c.otherItems?[c.otherItems]:[])].join(", "),
+    "Request date":c.requestDate,"Collected date":c.collectedDate,"Delivered date":c.deliveredDate,
+    "Driver":c.driver,"Status":STATUS_LABEL[statusOf(c)],"Remarks":c.remarks,"Notes":c.notes
+  }));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),"VSM Kit Tracker");
+  const data=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+  saveBlob(new Blob([data],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),`VSM-kit-tracker-${todayISO()}.xlsx`);
+});
+
+/* ---------- Filters ---------- */
+document.querySelectorAll(".stage").forEach(b=>b.addEventListener("click",()=>{ statusFilter = statusFilter===b.dataset.status ? "" : b.dataset.status; render(); }));
+["search","bagFilter","sortBy"].forEach(id=>$(id).addEventListener("input",render));
+
+/* ---------- Save copy with data ---------- */
+function saveBlob(blob,name){
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+$("btnCopy").addEventListener("click",()=>{
+  const payload=JSON.stringify({savedAt:new Date().toISOString(),cases}).replace(/</g,"\\u003c");
+  const html=PRISTINE.replace(/(<script type="application\/json" id="seedData">)[\s\S]*?(<\/script>)/,(m,p1,p2)=>p1+payload+p2);
+  saveBlob(new Blob([html],{type:"text/html"}),`VSM-kit-tracker-${todayISO()}.html`);
+  toast(`Saved a copy with ${cases.length} ${cases.length===1?"case":"cases"}`);
+});
+
+/* ---------- Start ---------- */
+(function start(){
+  try{ cases=JSON.parse(localStorage.getItem(STORE_KEY)||"[]"); }catch{ cases=[]; }
+  if(!Array.isArray(cases)) cases=[];
+  const notes=[];
+  let seed={savedAt:"",cases:[]};
+  try{ seed=JSON.parse($("seedData").textContent); }catch{}
+  let seen=[]; try{ seen=JSON.parse(localStorage.getItem(SEEN_KEY)||"[]"); }catch{}
+  if(seed.savedAt && Array.isArray(seed.cases) && seed.cases.length && !seen.includes(seed.savedAt)){
+    let added=0, updated=0;
+    for(const sc of seed.cases){
+      const i=cases.findIndex(c=>c.id===sc.id);
+      if(i<0){ cases.push(sc); added++; }
+      else if((sc.updatedAt||"")>(cases[i].updatedAt||"")){ cases[i]=sc; updated++; }
+    }
+    seen.push(seed.savedAt);
+    try{ localStorage.setItem(SEEN_KEY,JSON.stringify(seen.slice(-50))); }catch{}
+    persist();
+    if(added||updated) notes.push(`Loaded from this file: ${added} new ${added===1?"case":"cases"}, ${updated} updated.`);
+  }
+  if(typeof XLSX==="undefined") notes.push("You’re offline, so Upload Excel and Export to Excel won’t work. Tracking and editing still work.");
+  if(notes.length) banner(notes.join(" "));
+  render();
+})();
+</script>
+</body>
+</html>
